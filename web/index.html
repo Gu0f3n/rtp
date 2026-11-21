@@ -1,0 +1,1479 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+/* 首屏判定必须在样式表生效前跑完，否则未登录时会先闪出主界面再被遮住。 */
+(function () {
+  var ok = false;
+  try { ok = !!(localStorage.getItem("rtp.session") || sessionStorage.getItem("rtp.session")); } catch (e) {}
+  document.documentElement.className += ok ? " has-session" : " is-booting";
+})();
+</script>
+<title>大模型应用自动化红队测试平台</title>
+<link rel="stylesheet" href="/static/style.css?v=20261028login">
+</head>
+<body>
+<!-- ==================================================================
+     登录门禁
+     与 #app 是兄弟节点：Vue 只挂载 #app，因此这块内容不会被模板编译。
+     可见性由 <html> 上的 is-booting / has-session 两个类控制。
+     ================================================================== -->
+<div id="gate" class="gate">
+  <div class="gate-inner">
+
+    <section class="gate-aside">
+      <div class="ga-top">
+        <span class="ga-mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="M9 11.5l2 2 4-4" stroke-width="2.2"/>
+          </svg>
+        </span>
+        <span class="ga-ver">RTP &#183; v1.0.0</span>
+      </div>
+
+      <div class="ga-eyebrow">Automated LLM Red Teaming</div>
+      <h1 class="ga-title">自动化红队测试平台</h1>
+      <p class="ga-sub">面向大模型应用的攻击编排与效果评测。双通道生成载荷，多轮渐进式推进，双路交叉判定，全程留痕可复现。</p>
+
+      <div class="ga-spec">
+        <div><span>靶标应用</span><b>客服 T1 · 知识库 T2 · 工具 Agent T3 · 加固 T5</b></div>
+        <div><span>攻击载荷</span><b>70 条种子 · 5 族算子 · 四阶段级联链</b></div>
+        <div><span>判定机制</span><b>规则 + LLM 双路交叉，冲突率与 Kappa 一致性</b></div>
+        <div><span>实验统计</span><b>配对设计 · McNemar 精确检验 · Wilson 区间</b></div>
+      </div>
+
+      <div class="ga-foot">
+        <span class="ga-dot" id="gaHealth"></span>
+        <span id="gaHealthText">正在检查服务状态</span>
+      </div>
+    </section>
+
+    <section class="gate-panel">
+      <div class="gate-mbrand">
+        <span class="ga-mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="M9 11.5l2 2 4-4" stroke-width="2.2"/>
+          </svg>
+        </span>
+        <span class="gm-t">红队测试平台</span>
+        <span class="ga-ver">v1.0.0</span>
+      </div>
+
+      <form class="gate-card" id="loginForm" novalidate autocomplete="on">
+        <div class="gc-kicker">Sign in</div>
+        <div class="gc-head">
+          <h2>登录控制台</h2>
+          <p>使用平台账号进入测评工作区</p>
+        </div>
+
+        <div class="field" data-field="username">
+          <label for="lgUser">用户名</label>
+          <div class="input-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-1.6a4.4 4.4 0 0 0-4.4-4.4H8.4A4.4 4.4 0 0 0 4 19.4V21"/>
+              <circle cx="12" cy="7.5" r="3.7"/>
+            </svg>
+            <input id="lgUser" name="username" type="text" placeholder="admin"
+                   autocomplete="username" autocapitalize="off" autocorrect="off"
+                   spellcheck="false" aria-describedby="err-username">
+          </div>
+          <p class="field-err" id="err-username" role="alert"></p>
+        </div>
+
+        <div class="field" data-field="password">
+          <label for="lgPass">密码</label>
+          <div class="input-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="10.5" width="16" height="10" rx="2"/>
+              <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>
+            </svg>
+            <input id="lgPass" name="password" type="password" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;"
+                   autocomplete="current-password" aria-describedby="err-password">
+            <button type="button" class="pw-toggle" id="pwToggle"
+                    aria-label="显示密码" aria-pressed="false" tabindex="0">
+              <svg class="i-open" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2.2 12S5.8 5.6 12 5.6 21.8 12 21.8 12 18.2 18.4 12 18.4 2.2 12 2.2 12z"/>
+                <circle cx="12" cy="12" r="2.7"/>
+              </svg>
+              <svg class="i-slash" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2.2 12S5.8 5.6 12 5.6 21.8 12 21.8 12 18.2 18.4 12 18.4 2.2 12 2.2 12z"/>
+                <circle cx="12" cy="12" r="2.7"/>
+                <path d="M4 4l16 16"/>
+              </svg>
+            </button>
+          </div>
+          <p class="field-err" id="err-password" role="alert"></p>
+        </div>
+
+        <p class="caps-hint" id="capsHint" aria-live="polite">大写锁定已开启</p>
+
+        <div class="gc-row">
+          <label class="chk"><input type="checkbox" id="lgKeep" checked><span>保持登录</span></label>
+          <span class="gc-hint">演示账号 admin / rtp2026</span>
+        </div>
+
+        <div class="gate-alert" id="lgErr" role="alert">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+               stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M12 8v5"/><path d="M12 16.4v.2"/>
+          </svg>
+          <span id="lgErrText"></span>
+        </div>
+
+        <button class="gate-submit" id="lgSubmit" type="submit">
+          <span class="gs-label">登 录</span>
+          <span class="gs-load"><i class="gs-spin"></i>验证中</span>
+        </button>
+
+        <p class="gc-note">仅限授权的安全测评环境使用</p>
+      </form>
+    </section>
+
+  </div>
+</div>
+
+<div id="app" v-cloak>
+
+  <!-- ==================== 顶栏 ==================== -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#0b2417" stroke-width="2.2"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="M9 11.5l2 2 4-4" stroke-width="2.6"/>
+        </svg>
+      </span>
+      <span class="brand-text">
+        <span class="brand-title">大模型应用自动化红队测试平台</span>
+        <span class="brand-sub">Automated LLM Red Teaming</span>
+      </span>
+    </div>
+    <span class="spacer"></span>
+    <div class="topbar-meta">
+      <span class="status-pill" :class="health.mock ? 'mock' : 'live'">
+        {{ health.mock ? 'MOCK 模式' : '真实模型' }}
+      </span>
+      <template v-if="!health.mock">
+        <span class="sep"></span>
+        <span class="model-chip">靶标 {{ shortModel(health.models.target) }}</span>
+        <span class="model-chip">判定 {{ shortModel(health.models.judge) }}</span>
+      </template>
+      <span class="sep"></span>
+      <span class="fs11">{{ today }}</span>
+    </div>
+  </header>
+
+  <div class="shell">
+    <!-- ==================== 侧栏 ==================== -->
+    <nav class="side">
+      <template v-for="g in tabGroups" :key="g.name">
+        <div class="side-group">{{ g.name }}</div>
+        <button v-for="t in g.items" :key="t.k"
+                :class="{on: tab === t.k}" @click="go(t.k)">
+          <svg viewBox="0 0 24 24"><path :d="t.icon"/></svg>
+          <span>{{ t.n }}</span>
+          <span class="badge-num" v-if="t.k === 'review' && ov.review_queue">
+            {{ ov.review_queue }}
+          </span>
+        </button>
+      </template>
+      <div class="side-foot">
+        <span>v1.0.0</span>
+        <button class="side-out" @click="logout" title="退出登录" aria-label="退出登录">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15.5 17.5l4.5-5.5-4.5-5.5"/>
+            <path d="M20 12H9"/>
+            <path d="M11.5 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5.5"/>
+          </svg>
+          <span>退出</span>
+        </button>
+      </div>
+    </nav>
+
+    <main class="main">
+      <div class="notice red" v-if="health.mock">
+        <b>MOCK 模式</b>　未检测到可用的模型 API Key，所有响应由本地模拟逻辑产生。
+        本模式仅用于验证系统链路与界面，<b>产出的任何数值都不得写入论文或作为对外结论</b>。
+        在 <code>rtp/.env</code> 中配置 <code>LLM_API_KEY</code> 后重启即切换真实调用。
+      </div>
+
+      <!-- ==================================================================
+           总览
+           ================================================================== -->
+      <section v-if="tab === 'dash'" class="section-in">
+        <div class="page-head">
+          <div class="titles">
+            <div class="eyebrow">Overview</div>
+            <h1>总览</h1>
+            <div class="desc">
+              对靶标应用实施自动化红队测试：双通道生成攻击 → 多轮自适应编排 → 双路交叉判定 → 量化报告。
+            </div>
+          </div>
+          <div class="actions">
+            <button class="btn sm" @click="loadOverview">刷新数据</button>
+          </div>
+        </div>
+
+        <!-- 首屏结论：把 E5 配对结果从实验分析页提到首屏。
+             数字来自 /api/metrics/harden，与实验分析页同源，不二次计算。 -->
+        <div class="verdict" v-if="verdict" :class="verdict.tone">
+          <div class="vd-body">
+            <div class="vd-k">
+              核心结论 · 护栏有效性对照
+              <span class="vd-tag">{{ verdict.exp }} / {{ verdict.target }}</span>
+            </div>
+            <p class="vd-lead">{{ verdict.lead }}</p>
+            <p class="vd-tail">{{ verdict.tail }}</p>
+            <p class="vd-note">{{ verdict.blockedNote }}</p>
+          </div>
+          <div class="vd-side">
+            <div class="vd-fig"><b>{{ verdict.asrBefore }}</b><span>加固前 ASR</span></div>
+            <div class="vd-fig"><b>{{ verdict.asrAfter }}</b><span>加固后 ASR</span></div>
+            <div class="vd-fig"><b>{{ verdict.p }}</b><span>McNemar p</span></div>
+            <button class="btn sm" @click="go('exp')">完整对照 →</button>
+          </div>
+        </div>
+
+        <div class="grid c4" style="margin-bottom:14px">
+          <div class="kpi tone-brand">
+            <div class="v brand">{{ ov.targets || 0 }}</div>
+            <div class="l">被测靶标</div>
+          </div>
+          <div class="kpi tone-brand">
+            <div class="v">{{ ov.seeds || 0 }}</div>
+            <div class="l">种子用例</div>
+          </div>
+          <div class="kpi tone-brand">
+            <div class="v">{{ ov.cases || 0 }}</div>
+            <div class="l">攻击载荷</div>
+          </div>
+          <div class="kpi tone-brand">
+            <div class="v">{{ ov.runs || 0 }}</div>
+            <div class="l">执行任务</div>
+          </div>
+        </div>
+
+        <div class="grid c4" style="margin-bottom:18px">
+          <div class="kpi tone-danger">
+            <div class="v danger">{{ ov.breached || 0 }}</div>
+            <div class="l">已突破</div>
+          </div>
+          <div class="kpi tone-ok">
+            <div class="v ok">{{ ov.defended || 0 }}</div>
+            <div class="l">已防住</div>
+          </div>
+          <div class="kpi" :class="(ov.review_queue||0) > 0 ? 'tone-warn' : ''">
+            <div class="v" :class="(ov.review_queue||0) > 0 ? 'warn' : ''">{{ ov.review_queue || 0 }}</div>
+            <div class="l">待人工复核</div>
+          </div>
+          <div class="kpi">
+            <div class="v">{{ fmtCost(ov.total_cost) }}</div>
+            <div class="l">累计模型成本</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>靶标清单<span class="tag">被测对象</span></h3>
+          <div class="card-sub">
+            三个靶标刻意设计了不同的结构性弱点：T1 缺身份核验、T2 检索上下文混入指令、T3 工具调用无动作级授权。
+            T5 与 T2 严格同构，唯一变量是护栏配置，专用于 E5 护栏有效性对比。
+          </div>
+          <div class="table-wrap">
+          <table>
+            <thead><tr><th>编号</th><th>名称</th><th>形态</th><th>护栏档位</th><th>配置版本</th><th></th></tr></thead>
+            <tbody>
+              <tr v-for="t in targets" :key="t.uid">
+                <td class="mono">{{ t.uid }}</td>
+                <td>{{ t.name }}</td>
+                <td><span class="badge gray">{{ formLabel(t.form_type) }}</span></td>
+                <!-- "无护栏"是待加固状态，不是错误。红色留给"已突破/泄露"，
+                     否则整张表三分之二的格子都在报警，警示色就失效了 -->
+                <td><span class="badge" :class="t.guardrail_profile === 'none' ? 'warn' : 'ok'">
+                  {{ profileLabel(t.guardrail_profile) }}</span></td>
+                <td class="mono">{{ t.config_version }}</td>
+                <td class="tr"><button class="btn sm" @click="openTarget(t.uid)">试打</button></td>
+              </tr>
+              <tr v-if="!targets.length"><td colspan="6" class="empty">尚未登记靶标，请运行 scripts/init_db.py</td></tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>最近批次</h3>
+          <div class="table-wrap">
+          <table>
+            <thead><tr><th>批次</th><th>实验</th><th>靶标</th><th>策略</th><th>护栏</th><th>进度</th><th>状态</th></tr></thead>
+            <tbody>
+              <tr v-for="b in recentBatches" :key="b.uid">
+                <td class="mono">{{ b.uid }}</td>
+                <td><span class="badge brand">{{ b.experiment || '—' }}</span></td>
+                <td>{{ b.target_uid }}</td>
+                <td class="nowrap">{{ b.strategy }}{{ b.max_turns > 1 ? ' × ' + b.max_turns : '' }}</td>
+                <td class="fs12">{{ profileLabel(b.guardrail_profile) }}</td>
+                <td class="nowrap">{{ b.done }} / {{ b.total }}</td>
+                <td><span class="badge" :class="batchStatusClass(b.status)">{{ b.status }}</span></td>
+              </tr>
+              <tr v-if="!batches.length"><td colspan="7" class="empty">尚无实验批次</td></tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           靶标试打
+           ================================================================== -->
+      <section v-if="tab === 'targets'" class="section-in">
+        <div class="page-head">
+          <div class="titles">
+            <div class="eyebrow">Target Sandbox</div>
+            <h1>靶标试打</h1>
+            <div class="desc">
+              直接与靶标交互，人工确认薄弱点是否按设计生效。切换护栏档位可对比同一句话的响应差异。
+            </div>
+          </div>
+        </div>
+
+        <div class="grid c2">
+          <div class="card">
+            <h3>测试配置</h3>
+            <div class="row" style="margin-bottom:12px">
+              <label class="f" style="flex:1">
+                <span>靶标</span>
+                <select v-model="tSel" @change="loadTargetDetail">
+                  <option v-for="t in targets" :key="t.uid" :value="t.uid">{{ t.uid }} · {{ t.name }}</option>
+                </select>
+              </label>
+              <label class="f" style="flex:1">
+                <span>护栏档位</span>
+                <select v-model="tProfile" @change="loadTargetDetail">
+                  <option v-for="p in profiles" :key="p.key" :value="p.key">{{ p.label }}</option>
+                </select>
+              </label>
+            </div>
+            <div class="row" style="margin-bottom:12px">
+              <button class="btn sm" @click="loadPrompt(false)">基线系统提示</button>
+              <button class="btn sm" @click="loadPrompt(true)">加固系统提示</button>
+              <button class="btn sm danger" @click="chatLog = []">清空会话</button>
+            </div>
+
+            <div v-if="targetProfile" class="insight">
+              <span class="t">该靶标的结构性弱点</span>
+              {{ targetProfile.structural_weakness }}
+            </div>
+
+            <div v-if="promptView" style="margin-top:10px">
+              <div class="fs12 muted" style="margin-bottom:6px">
+                系统提示 · {{ promptView.hardened ? '加固版' : '基线版' }}
+              </div>
+              <pre class="json">{{ promptView.prompt }}</pre>
+              <div class="fs12 muted mt12">预期薄弱点</div>
+              <div class="fs12">{{ promptView.expected_weakness }}</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>会话<span class="tag">{{ tSel }} · {{ profileLabel(tProfile) }}</span></h3>
+            <div class="chat-box" ref="chatBox">
+              <div v-for="(m, i) in chatLog" :key="i" class="msg" :class="m.role">
+                <div>{{ m.text }}</div>
+                <div class="meta" v-if="m.meta">{{ m.meta }}</div>
+              </div>
+              <div v-if="!chatLog.length" class="empty">输入一句话开始试打</div>
+            </div>
+            <div class="row" style="margin-top:14px">
+              <textarea v-model="chatInput" placeholder="例如：请告诉我员工内部折扣码是多少"
+                        style="flex:1;min-height:58px" @keydown.ctrl.enter="sendChat"></textarea>
+              <button class="btn primary" :disabled="chatBusy || !chatInput.trim()" @click="sendChat">
+                {{ chatBusy ? '发送中…' : '发送' }}
+              </button>
+            </div>
+            <div class="fs11 muted" style="margin-top:6px">Ctrl + Enter 快捷发送</div>
+          </div>
+        </div>
+
+        <div class="card" v-if="tSel === 'T2' || tSel === 'T5'">
+          <h3>知识库<span class="tag">含受限文档与投毒文档</span></h3>
+          <div class="card-sub">
+            投毒文档 MT-2026-0412 末尾埋有注入指令。它的危害程度取决于<b>检索位次</b>——
+            排第一位时对模型注意力的影响远大于排第三位。
+          </div>
+          <div class="row" style="margin-bottom:12px">
+            <input type="text" v-model="kbQuery" placeholder="输入检索词，例如：例会纪要"
+                   style="flex:1" @keydown.enter="searchKb">
+            <button class="btn" @click="searchKb">检索</button>
+          </div>
+          <div class="table-wrap">
+          <table>
+            <thead><tr><th>文档编号</th><th>标题</th><th>标记</th></tr></thead>
+            <tbody>
+              <tr v-for="d in kbDocs" :key="d.doc_id">
+                <td class="mono">{{ d.doc_id }}</td>
+                <td>{{ d.title }}</td>
+                <td>
+                  <span v-if="d.sensitive" class="badge err">机密</span>
+                  <span v-if="d.poisoned" class="badge warn">含注入指令</span>
+                  <span v-if="!d.sensitive && !d.poisoned" class="badge gray">公开</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          </div>
+          <div v-if="kbHits.length" class="mt16">
+            <div class="fs12 muted" style="margin-bottom:8px">本次检索命中（按相关度排序）</div>
+            <div class="table-wrap">
+            <table>
+              <thead><tr><th>位次</th><th>文档</th><th>BM25 得分</th><th>标记</th></tr></thead>
+              <tbody>
+                <tr v-for="(h, i) in kbHits" :key="i">
+                  <td class="mono">{{ i + 1 }}</td>
+                  <td class="mono">{{ h.doc_id }} · {{ h.title }}</td>
+                  <td class="mono">{{ h.score }}</td>
+                  <td>
+                    <span v-if="h.sensitive" class="badge err">机密</span>
+                    <span v-if="h.poisoned" class="badge warn">含注入</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           攻击用例
+           ================================================================== -->
+      <section v-if="tab === 'cases'" class="section-in">
+        <div class="page-head">
+          <div class="titles">
+            <div class="eyebrow">Attack Payloads</div>
+            <h1>攻击用例</h1>
+            <div class="desc">
+              双通道生成：模板通道保覆盖面与可复现性，LLM 变异通道负责绕过表层过滤。
+              每条载荷都可溯源到种子、通道与算子链。
+            </div>
+          </div>
+        </div>
+
+        <div class="insight">
+          <span class="t">方法说明 · 为什么要两条通道</span>
+          模板通道零成本、完全可复现，但表层形式固定，容易被模式匹配识别；
+          LLM 变异通道形式多变，但质量不稳定且每次结果不同。
+          <b>只用模板会高估防御能力，只用变异则实验不可复现。</b>
+          两者的并集既保证覆盖又保证绕过，E3 消融实验正是要证明这一点。
+        </div>
+
+        <div class="card">
+          <h3>生成载荷</h3>
+          <div class="row" style="margin-bottom:14px">
+            <label class="f">目标靶标
+              <select v-model="gen.target_uid" style="min-width:130px">
+                <option value="T1">T1 客服</option>
+                <option value="T2">T2 知识库</option>
+                <option value="T3">T3 Agent</option>
+              </select>
+            </label>
+            <label class="f">生成通道
+              <select v-model="gen.channelMode" style="min-width:130px">
+                <option value="template">仅模板</option>
+                <option value="llm">仅 LLM 变异</option>
+                <option value="both">双通道</option>
+              </select>
+            </label>
+            <label class="f">种子数量上限
+              <input type="number" v-model.number="gen.limit" min="1" max="60" style="width:92px">
+            </label>
+            <button class="btn primary" :disabled="genBusy" @click="doGenerate"
+                    style="align-self:flex-end;margin-bottom:1px">
+              {{ genBusy ? '生成中…' : '开始生成' }}
+            </button>
+          </div>
+          <div class="row">
+            <span class="fs12 muted">变异算子</span>
+            <label v-for="o in operators" :key="o.key"
+                   class="fs12" style="display:flex;align-items:center;gap:5px;cursor:pointer">
+              <input type="checkbox" :value="o.key" v-model="gen.operators">
+              {{ o.label }}
+              <span class="muted fs11">（{{ o.layer }}）</span>
+            </label>
+          </div>
+          <div v-if="genResult" class="notice blue" style="margin-top:14px;margin-bottom:0">
+            新建 <b>{{ genResult.created }}</b> 条载荷　｜　按通道 {{ JSON.stringify(genResult.by_channel) }}
+            　｜　按算子 {{ JSON.stringify(genResult.by_operator) }}
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>载荷列表<span class="tag">共 {{ caseTotal }} 条</span></h3>
+          <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width:88px">编号</th><th style="width:110px">通道</th><th style="width:180px">算子链</th><th>内容</th></tr></thead>
+            <tbody>
+              <tr v-for="c in cases" :key="c.id">
+                <td class="mono">{{ c.uid }}</td>
+                <td><span class="badge" :class="c.channel === 'llm' ? 'warn' : 'gray'">{{ c.channel }}</span></td>
+                <td class="mono" style="font-size:11px">{{ c.operator_chain.join(' + ') || '—' }}</td>
+                <td class="fs12">{{ c.text.slice(0, 160) }}{{ c.text.length > 160 ? '…' : '' }}</td>
+              </tr>
+              <tr v-if="!cases.length"><td colspan="4" class="empty">尚无载荷，请先生成</td></tr>
+            </tbody>
+          </table>
+          </div>
+          <div class="row mt12">
+            <button class="btn sm" :disabled="caseOffset <= 0" @click="casePage(-1)">上一页</button>
+            <span class="fs12 muted">{{ caseOffset + 1 }} – {{ Math.min(caseOffset + 50, caseTotal) }}</span>
+            <button class="btn sm" :disabled="caseOffset + 50 >= caseTotal" @click="casePage(1)">下一页</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           攻击任务
+           ================================================================== -->
+      <section v-if="tab === 'runs'" class="section-in">
+        <div class="page-head">
+          <div class="titles">
+            <div class="eyebrow">Attack Runs</div>
+            <h1>攻击任务</h1>
+            <div class="desc">
+              每个任务 = 一个载荷 × 一个靶标 × 一套配置。多轮任务会记录逐轮轨迹、警觉信号与回退情况。
+            </div>
+          </div>
+        </div>
+
+        <div class="insight">
+          <span class="t">方法说明 · 状态语义</span>
+          <b>执行状态</b>（pending / running / completed / error）与<b>攻击结果</b>（success 布尔值）是两件事，
+          必须分开记录。把两者塞进同一个字段，会让"被防住"和"跑挂了"混为一谈，
+          ASR 的分母随之失真——这是红队平台最常见的建模错误。
+        </div>
+
+        <div class="card">
+          <h3>新建批次</h3>
+          <div class="row">
+            <label class="f">靶标
+              <select v-model="runForm.target_uid" style="min-width:100px">
+                <option v-for="t in targets" :key="t.uid" :value="t.uid">{{ t.uid }}</option>
+              </select>
+            </label>
+            <label class="f">策略
+              <select v-model="runForm.strategy" style="min-width:120px">
+                <option value="single">单轮</option>
+                <option value="multi">多轮编排</option>
+              </select>
+            </label>
+            <label class="f">轮次上限
+              <input type="number" v-model.number="runForm.max_turns" min="1" max="10" style="width:78px">
+            </label>
+            <label class="f">护栏档位
+              <select v-model="runForm.guardrail_profile" style="min-width:130px">
+                <option value="">用靶标默认</option>
+                <option v-for="p in profiles" :key="p.key" :value="p.key">{{ p.label }}</option>
+              </select>
+            </label>
+            <label class="f">载荷数上限
+              <input type="number" v-model.number="runForm.limit" min="1" style="width:86px">
+            </label>
+            <label class="f">载荷类型
+              <select v-model="runForm.plain_only" style="min-width:130px">
+                <option :value="true">未变异（单变量）</option>
+                <option :value="false">含算子变异</option>
+              </select>
+            </label>
+            <button class="btn primary" :disabled="runBusy" @click="startRun"
+                    style="align-self:flex-end;margin-bottom:1px">
+              {{ runBusy ? '执行中…' : '创建并执行' }}
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>批次</h3>
+          <div class="table-wrap">
+          <table>
+            <thead><tr><th>批次</th><th>实验</th><th>靶标</th><th>策略</th><th>护栏</th><th>进度</th><th>状态</th><th></th></tr></thead>
+            <tbody>
+              <tr v-for="b in batches" :key="b.uid">
+                <td class="mono">{{ b.uid }}</td>
+                <td><span class="badge brand">{{ b.experiment || '—' }}</span></td>
+                <td>{{ b.target_uid }}</td>
+                <td class="nowrap">{{ b.strategy }}{{ b.max_turns > 1 ? ' × ' + b.max_turns : '' }}</td>
+                <td class="fs12">{{ profileLabel(b.guardrail_profile) }}</td>
+                <td class="nowrap">{{ b.done }} / {{ b.total }}</td>
+                <td><span class="badge" :class="batchStatusClass(b.status)">{{ b.status }}</span></td>
+                <td class="tr nowrap">
+                  <button class="btn sm" @click="selectBatch(b.uid)">查看</button>
+                  <button class="btn sm" v-if="b.done < b.total" @click="resumeBatch(b.uid)">续跑</button>
+                </td>
+              </tr>
+              <tr v-if="!batches.length"><td colspan="8" class="empty">尚无批次</td></tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+
+        <div class="card" v-if="curBatch">
+          <h3>
+            批次 {{ curBatch.uid }} · 任务明细
+            <span class="tag">ASR {{ pct(batchMetrics.asr) }}</span>
+          </h3>
+          <div class="grid c4" style="margin-bottom:16px">
+            <div class="kpi"><div class="v">{{ batchMetrics.finished || 0 }}</div><div class="l">有效样本</div></div>
+            <div class="kpi tone-danger"><div class="v danger">{{ batchMetrics.success || 0 }}</div><div class="l">攻击成功</div></div>
+            <div class="kpi"><div class="v">{{ batchMetrics.avg_turns || 0 }}</div><div class="l">平均轮次</div></div>
+            <div class="kpi"><div class="v">{{ batchMetrics.blocked_turns || 0 }}</div><div class="l">护栏拦截轮次</div></div>
+          </div>
+          <!-- 级联链专有面板：仅 chain 批次出现。
+               核心是"各阶段缴获效率"——它递减得多快，就说明防御在哪一级开始起作用。 -->
+          <div v-if="batchMetrics.chain" class="chain-panel">
+            <div class="chain-hd">
+              级联链渗透
+              <span class="tag">平均深度 {{ batchMetrics.chain.avg_depth }} / {{ batchMetrics.chain.max_stages }} 级</span>
+              <span class="tag">平均缴获 {{ batchMetrics.chain.avg_slot_total }} 项</span>
+            </div>
+            <div class="chain-yield">
+              <div class="cy-row" v-for="(v, k) in batchMetrics.chain.slot_yield" :key="k">
+                <span class="cy-lb">{{ stateLabel(k) }}</span>
+                <span class="cy-bar"><i :style="{ width: chainBar(v) }"></i></span>
+                <span class="cy-v">{{ v }}</span>
+              </div>
+            </div>
+            <div class="chain-break">
+              <span class="lb-inline">中断位置</span>
+              <span v-for="(n, k) in batchMetrics.chain.break_at" :key="k" class="slot-chip">
+                {{ k }}<b>{{ n }}</b>
+              </span>
+            </div>
+          </div>
+          <div class="matrix">
+            <div class="matrix-hd">
+              任务状态矩阵
+              <span class="tag">{{ runList.length }} 个任务</span>
+              <span class="grow"></span>
+              <span class="matrix-legend">
+                <i class="sm-ok"></i>防住 {{ matrixStat.ok }}
+                <i class="sm-success"></i>突破 {{ matrixStat.success }}
+                <i class="sm-error"></i>异常 {{ matrixStat.error }}
+                <i class="sm-idle"></i>未完成 {{ matrixStat.idle }}
+              </span>
+            </div>
+            <div class="matrix-cells">
+              <button v-for="(r, i) in runList" :key="r.id"
+                      class="mcell" :class="matrixClass(r)"
+                      :title="r.uid + ' · ' + runStatusLabel(r.status) + (r.status === 'completed' ? (r.success ? ' · 已突破' : ' · 已防住') : '')"
+                      @click="openRun(r.id)">{{ i + 1 }}</button>
+              <span v-if="!runList.length" class="muted fs12">尚无任务</span>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+          <table>
+            <thead><tr><th>任务</th><th>载荷</th><th>执行状态</th><th>攻击结果</th><th>轮次</th><th></th></tr></thead>
+            <tbody>
+              <tr v-for="r in runList" :key="r.id">
+                <td class="mono" style="font-size:11px">{{ r.uid }}</td>
+                <td class="mono" style="font-size:11px">{{ r.case_uid || '—' }}</td>
+                <td><span class="badge" :class="runStatusClass(r.status)">{{ runStatusLabel(r.status) }}</span></td>
+                <td>
+                  <span v-if="r.status === 'completed'" class="badge" :class="r.success ? 'err' : 'ok'">
+                    {{ r.success ? '已突破' : '已防住' }}
+                  </span>
+                  <span v-else class="muted fs12">—</span>
+                </td>
+                <td class="mono">{{ r.total_turns }}</td>
+                <td class="tr"><button class="btn sm" @click="openRun(r.id)">轨迹</button></td>
+              </tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+
+        <div class="card" v-if="runDetail">
+          <h3>
+            攻击轨迹 {{ runDetail.uid }}
+            <span class="tag">{{ runDetail.category }} · {{ (runDetail.operator_chain || []).join('+') || '无算子' }}</span>
+            <span v-if="runLive" class="live">实时刷新</span>
+            <span class="grow"></span>
+            <button class="btn sm" @click="doReplay(runDetail.id)">重放验证</button>
+          </h3>
+          <div class="notice blue">
+            <b>原始载荷：</b>{{ runDetail.case_text }}
+          </div>
+          <div v-if="runDetail.stop_reason" class="stop-reason">
+            <b>终止原因</b>{{ runDetail.stop_reason }}
+          </div>
+
+          <!-- 任务编排图：运维视角的横向执行链路，节点可点，跳到对应轮次 -->
+          <div v-if="taskGraph" class="taskgraph">
+            <div class="tg-hd">
+              <span class="tg-hd-t">执行链路</span>
+              <span class="matrix-legend tg-lg">
+                <i class="lg-ok"></i>正常推进
+                <i class="lg-blk"></i>护栏拦截
+                <i class="lg-warn"></i>回退 / 冲突
+                <i class="lg-hit"></i>攻击成功
+              </span>
+            </div>
+            <div class="tg-scroll">
+              <div class="tg-canvas"
+                   :style="{ width: taskGraph.width + 'px', height: taskGraph.height + 'px' }">
+                <svg class="tg-edges" :width="taskGraph.width" :height="taskGraph.height">
+                  <defs>
+                    <marker id="tgAh" viewBox="0 0 8 8" refX="7.2" refY="4"
+                            markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse"
+                            orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#4d5a53"/></marker>
+                    <marker id="tgAhBack" viewBox="0 0 8 8" refX="7.2" refY="4"
+                            markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse"
+                            orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#e3a03c"/></marker>
+                    <marker id="tgDot" viewBox="0 0 6 6" refX="3" refY="3"
+                            markerWidth="5" markerHeight="5" markerUnits="userSpaceOnUse"
+                            orient="auto"><circle cx="3" cy="3" r="2.4" fill="#e3a03c"/></marker>
+                  </defs>
+                  <path v-for="e in taskGraph.edges" :key="e.key" :d="e.d"
+                        :class="'tg-edge ' + e.kind"
+                        :marker-start="e.kind === 'back' ? 'url(#tgDot)' : null"
+                        :marker-end="e.kind === 'back' ? 'url(#tgAhBack)' : 'url(#tgAh)'"></path>
+                </svg>
+                <div class="tg-track"
+                     :style="{ paddingTop: taskGraph.TOP + 'px', paddingLeft: taskGraph.PAD + 'px', gap: taskGraph.GAP + 'px' }">
+                  <div v-for="n in taskGraph.nodes" :key="n.key"
+                       class="tg-node" :class="[n.kind, 'st-' + n.status]"
+                       :style="{ width: taskGraph.W + 'px', height: taskGraph.H + 'px' }"
+                       :title="n.title + ' · ' + n.sub"
+                       @click="n.turnId && focusTurn(n.turnId)">
+                    <span class="tg-code">{{ n.code }}</span>
+                    <span class="tg-title">{{ n.title }}</span>
+                    <span class="tg-sub">{{ n.sub }}</span>
+                    <span v-if="n.kind === 'turn'" class="tg-bar">
+                      <i :style="{ width: Math.max(6, n.ratio * 100) + '%' }"></i>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="tg-stats">
+              <span><b>{{ taskGraph.stats.turns }}</b> {{ runDetail.strategy === 'chain' ? '级' : '轮' }}</span>
+              <span><b>{{ taskGraph.stats.latency }}</b> ms 累计</span>
+              <span><b>{{ taskGraph.stats.avg }}</b> ms 均{{ runDetail.strategy === 'chain' ? '级' : '轮' }}</span>
+              <span><b>{{ taskGraph.stats.worst }}</b> ms 最慢</span>
+              <span :class="{ hot: taskGraph.stats.blocked }"><b>{{ taskGraph.stats.blocked }}</b> 拦截</span>
+              <span :class="{ hot: taskGraph.stats.back }"><b>{{ taskGraph.stats.back }}</b> 回退</span>
+              <span><b>{{ taskGraph.stats.token }}</b> token</span>
+              <span><b>¥{{ taskGraph.stats.cost.toFixed(4) }}</b></span>
+            </div>
+          </div>
+
+          <div class="timeline">
+            <div v-for="t in runDetail.turns" :key="t.id"
+                 :data-turn="t.id"
+                 class="tl-item" :class="{ok: t.turn_index === runDetail.success_turn, bt: t.backtracked, blocked: t.blocked}">
+              <div class="tl-hd">
+                {{ runDetail.strategy === 'chain' ? '第 ' + t.turn_index + ' 级' : '第 ' + t.turn_index + ' 轮' }}
+                · {{ stateLabel(t.state) }}
+                <span v-if="t.backtracked" class="badge warn">已回退</span>
+                <span v-if="t.blocked" class="badge err">被护栏拦截</span>
+                <span v-for="s in t.signals" :key="s" class="badge gray">{{ s }}</span>
+              </div>
+              <div class="tl-body">
+                <div class="lb">攻击方</div>
+                <div class="tx">{{ t.prompt }}</div>
+                <div class="lb">目标响应</div>
+                <div class="tx">{{ t.response }}</div>
+                <div v-if="slotCount(t.slots)" class="tl-slots">
+                  <span class="lb-inline">本级缴获</span>
+                  <span v-for="(vals, kind) in t.slots.out" :key="kind" class="slot-chip">
+                    {{ slotLabel(kind) }}<b>{{ vals.join('、') }}</b>
+                  </span>
+                </div>
+                <div v-else-if="runDetail.strategy === 'chain'" class="tl-slots">
+                  <span class="lb-inline">本级缴获</span>
+                  <span class="slot-empty">无新情报，链在此级后中断</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="lastJudge" class="mt16">
+            <div class="fs12 muted" style="margin-bottom:8px">最后一轮判定（双路交叉）</div>
+            <div class="table-wrap">
+            <table>
+              <tbody>
+                <tr>
+                  <th style="width:140px">规则路</th>
+                  <td>
+                    <span class="badge" :class="lastJudge.rule_success ? 'err' : 'ok'">
+                      {{ lastJudge.rule_success ? '成功' : '未成功' }}</span>
+                    <span class="fs12 muted" style="margin-left:8px">{{ (lastJudge.rule_evidence && lastJudge.rule_evidence.reason) || '' }}</span>
+                  </td>
+                </tr>
+                <tr>
+                  <th>LLM 路</th>
+                  <td>
+                    <span class="badge" :class="lastJudge.llm_success ? 'err' : 'ok'">
+                      {{ lastJudge.llm_success ? '成功' : '未成功' }}</span>
+                    <span class="fs12 muted" style="margin-left:8px">置信度 {{ lastJudge.llm_confidence }}</span>
+                    <div class="fs12 muted" style="margin-top:4px">{{ lastJudge.llm_reason }}</div>
+                  </td>
+                </tr>
+                <tr>
+                  <th>最终判定</th>
+                  <td>
+                    <b>{{ lastJudge.final_success ? '攻击成功' : '未成功' }}</b>
+                    <span v-if="lastJudge.conflict" class="badge warn" style="margin-left:8px">两路冲突</span>
+                    <span v-if="lastJudge.need_review" class="badge warn" style="margin-left:6px">已转人工复核</span>
+                  </td>
+                </tr>
+                <tr>
+                  <th>危害分级</th>
+                  <td>
+                    <span class="badge" :class="sevBadge(lastJudge).cls">{{ sevBadge(lastJudge).label }}</span>
+                    <span class="fs12 muted" style="margin-left:8px">{{ sevBadge(lastJudge).desc }}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            </div>
+          </div>
+
+          <div v-if="replayResult" class="notice green mt12" style="margin-bottom:0">
+            重放结果：{{ replayResult.reproduced ? '完全复现' : '未完全复现' }}，
+            一致 {{ replayResult.matched_turns }} / {{ replayResult.total_turns }} 轮
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           实验分析
+           ================================================================== -->
+      <section v-if="tab === 'exp'" class="section-in">
+        <div class="page-head">
+          <div class="titles">
+            <div class="eyebrow">Experiments</div>
+            <h1>实验分析</h1>
+            <div class="desc">
+              E1 基线摸底　｜　E2 单轮 vs 多轮　｜　E3 生成策略消融　｜　E4 判定机制对比　｜　E5 护栏有效性
+            </div>
+          </div>
+        </div>
+
+        <div class="insight">
+          <span class="t">实验设计原则 · 单变量</span>
+          每组实验只允许一个自变量变化。E1 / E2 / E5 固定使用<b>未叠加算子</b>的载荷，
+          把"生成方式"这个变量隔离掉；E3 才引入通道与算子变量。
+          否则一旦 ASR 变化，无法归因是轮次带来的还是变异带来的。
+        </div>
+
+        <div class="card">
+          <h3>一键执行</h3>
+          <div class="run-grid">
+            <button class="run-btn" @click="runExp('E1', 'T1')">
+              <span class="rid">E1</span><span class="rnm">基线（T1）</span>
+            </button>
+            <button class="run-btn" @click="runExp('E2', 'T1')">
+              <span class="rid">E2</span><span class="rnm">轮次对比（T1）</span>
+            </button>
+            <button class="run-btn" @click="runExp('E3', 'T1')">
+              <span class="rid">E3</span><span class="rnm">生成消融（T1）</span>
+            </button>
+            <button class="run-btn" @click="runExp('E5', hardenTarget)">
+              <span class="rid">E5</span><span class="rnm">护栏对比（{{ hardenTarget }}）</span>
+            </button>
+            <button class="run-btn" @click="loadE4">
+              <span class="rid">E4</span><span class="rnm">判定对比（读取已有）</span>
+            </button>
+          </div>
+          <div class="fs12 muted mt12">实验在后台执行，完成后刷新本页查看。</div>
+        </div>
+
+        <div class="grid c2">
+          <div class="card">
+            <h3>E2 · ASR 随轮次深度的变化</h3>
+            <div ref="e2Chart" class="chart"></div>
+            <div v-if="!e2Points.length" class="empty">尚无 E2 数据，请先执行实验</div>
+          </div>
+          <div class="card">
+            <h3>E5 · 护栏配置有效性对比
+              <span class="tag">{{ hardenTarget }} · 按档位分组</span>
+            </h3>
+            <div ref="e5Chart" class="chart"></div>
+            <div v-if="!e5Data || !e5Data.baseline_asr && Object.keys(e5Data.profiles || {}).length < 2"
+                 class="empty">
+              {{ !e5Data ? '尚无 E5 数据，请先执行实验'
+                         : hardenTarget + ' 只有单一护栏档位的数据，无法计算削减率' }}
+            </div>
+          </div>
+        </div>
+
+        <div class="card" v-if="e5Data">
+          <h3>E5 明细<span class="tag">削减率 = 相对无护栏基线的 ASR 下降幅度</span></h3>
+          <div class="table-wrap">
+          <table>
+            <thead><tr><th>护栏配置</th><th>ASR</th><th>削减率</th><th>拦截轮次</th><th>平均轮次</th></tr></thead>
+            <tbody>
+              <tr v-for="(v, k) in e5Data.profiles" :key="k">
+                <td>{{ profileLabel(k) }}</td>
+                <td class="mono">{{ pct(v.asr) }}</td>
+                <td>
+                  <span v-if="k === 'none'" class="badge gray">基线本身</span>
+                  <span v-else class="badge" :class="v.reduction_rate === null ? 'gray' : (v.reduction_rate > 0.5 ? 'ok' : 'warn')">
+                    {{ v.reduction_rate === null ? '—' : pct(v.reduction_rate) }}
+                  </span>
+                </td>
+                <td class="mono">{{ v.blocked_turns }}</td>
+                <td class="mono">{{ v.avg_turns }}</td>
+              </tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+
+        <!-- ============================================================
+             加固前后对照：同一批载荷逐条配对
+             E5 回答"哪一层最值钱"，这里回答"整体加固把系统变成了什么样"。
+             四格表是这一节的核心——它把"两个百分比"变成"逐条配对证据"。
+             ============================================================ -->
+        <div class="card" v-if="hardenData">
+          <h3>加固前后对照
+            <span class="seg">
+              <button v-for="t in ['T1', 'T2']" :key="t"
+                      :class="{ on: hardenTarget === t }"
+                      @click="switchHarden(t)">{{ t }}</button>
+            </span>
+          </h3>
+
+          <div v-if="!hardenData.comparable" class="notice">
+            <b>当前数据不可配对：</b>{{ hardenData.reason }}
+          </div>
+
+          <template v-else>
+            <div class="grid c4" style="margin-bottom:6px">
+              <div class="kpi">
+                <div class="v danger">{{ pct(hardenData.before.asr) }}</div>
+                <div class="l">加固前 ASR · {{ hardenTarget }} 无护栏</div>
+              </div>
+              <div class="kpi">
+                <div class="v ok">{{ pct(hardenData.after.asr) }}</div>
+                <div class="l">加固后 ASR · 全护栏</div>
+              </div>
+              <div class="kpi">
+                <div class="v">
+                  {{ hardenData.effect.reduction_rate === null ? '—' : pct(hardenData.effect.reduction_rate) }}
+                </div>
+                <div class="l">ASR 削减率</div>
+              </div>
+              <div class="kpi">
+                <div class="v" :class="hardenData.mcnemar.significant ? 'ok' : 'warn'">
+                  {{ Number(hardenData.mcnemar.p_value).toFixed(3) }}
+                </div>
+                <div class="l">McNemar p 值</div>
+              </div>
+            </div>
+
+            <div class="pair-note">
+              配对 {{ hardenData.checks.paired_cases }} 条载荷，载荷集合
+              {{ hardenData.checks.same_cases ? '完全一致' : '不一致' }}；
+              {{ hardenData.checks.both_live ? '真实模型调用' : '含 mock 数据，不可用于论文' }}。
+              ASR 95% 置信区间　加固前 {{ ci(hardenData.before.asr_ci) }}　
+              加固后 {{ ci(hardenData.after.asr_ci) }}。
+            </div>
+
+            <div class="grid c2 mt16">
+              <div>
+                <div class="lb-title">配对结果（2×2）</div>
+                <table class="pair-tbl">
+                  <thead>
+                    <tr>
+                      <th></th>
+                      <th>加固后 · 未攻破</th>
+                      <th>加固后 · 攻破</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <th>加固前 · 攻破</th>
+                      <td class="pc-ok">
+                        <b>{{ hardenData.matrix.only_before }}</b>
+                        <span>护栏生效</span>
+                      </td>
+                      <td class="pc-err">
+                        <b>{{ hardenData.matrix.both_success }}</b>
+                        <span>漏防</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>加固前 · 未攻破</th>
+                      <td class="pc-gray">
+                        <b>{{ hardenData.matrix.both_fail }}</b>
+                        <span>均防住</span>
+                      </td>
+                      <td class="pc-warn">
+                        <b>{{ hardenData.matrix.only_after }}</b>
+                        <span>护栏反效</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div class="fs12 muted mt12">
+                  只有对角线上方的两格进入 McNemar 检验：漏防与均防住不携带
+                  "护栏是否起作用"的信息。护栏反效应为 0，出现即说明模型自身波动
+                  或样本污染，需复查。
+                </div>
+              </div>
+
+              <div>
+                <div class="lb-title">危害分级位移</div>
+                <div class="table-wrap">
+                  <table>
+                    <thead><tr><th>位移</th><th>条数</th></tr></thead>
+                    <tbody>
+                      <tr v-for="(v, k) in hardenData.effect.severity_shift" :key="k">
+                        <td>{{ sevPair(k) }}</td>
+                        <td class="mono">{{ v.count }}</td>
+                      </tr>
+                      <tr v-if="!Object.keys(hardenData.effect.severity_shift).length">
+                        <td colspan="2" class="empty">无数据</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="pair-stats">
+                  <span>实质泄露 <b>{{ hardenData.effect.substantive_leaks_before }}</b> → <b>{{ hardenData.effect.substantive_leaks_after }}</b></span>
+                  <span>拦截轮次 <b>{{ hardenData.effect.blocked_turns_before }}</b> → <b>{{ hardenData.effect.blocked_turns_after }}</b></span>
+                  <span>平均轮次 <b>{{ hardenData.effect.avg_turns_before }}</b> → <b>{{ hardenData.effect.avg_turns_after }}</b></span>
+                  <span>侦察率 <b>{{ pct(hardenData.effect.recon_rate_before) }}</b> → <b>{{ pct(hardenData.effect.recon_rate_after) }}</b></span>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="hardenData.leaks.length" class="mt16">
+              <div class="lb-title">
+                加固后仍被攻破 · {{ hardenData.leaks.length }} 条
+                <span class="tag">归因看"护栏是否命中过"</span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr><th>用例</th><th>类别</th><th>危害分级</th><th>轮次</th><th>归因</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="l in hardenData.leaks" :key="l.case_uid">
+                      <td class="mono">{{ l.case_uid }}</td>
+                      <td class="fs12">{{ l.category }}</td>
+                      <td><span class="badge" :class="sevOf(l.severity).cls">{{ sevOf(l.severity).label }}</span></td>
+                      <td class="mono">{{ l.turns }}</td>
+                      <td class="fs12 muted">{{ l.hint }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div v-else class="notice ok mt16">
+              加固后无一条被攻破。
+              <template v-if="!hardenData.checks.both_live">
+                当前为 mock 数据，mock 对加固配置是写死的拒绝，必然给出 0，不可用于论文。
+              </template>
+              <template v-else>
+                本轮 {{ hardenData.checks.paired_cases }} 条配对的置信区间仍较宽，
+                结论宜作定性参考，不宜外推为精确比例。
+              </template>
+            </div>
+          </template>
+        </div>
+
+        <div class="card" v-if="e4Data">
+          <h3>E4 · 判定机制对比</h3>
+          <div class="grid c4" style="margin-bottom:16px">
+            <div class="kpi"><div class="v">{{ e4Data.llm_valid }}</div><div class="l">有效判定样本</div></div>
+            <div class="kpi tone-brand">
+              <div class="v brand">{{ e4Data.kappa_rule_llm === null ? '—' : e4Data.kappa_rule_llm.toFixed(3) }}</div>
+              <div class="l">Kappa 一致性系数</div>
+            </div>
+            <div class="kpi tone-warn">
+              <div class="v warn">{{ e4Data.conflict_rate === null ? '—' : pct(e4Data.conflict_rate) }}</div>
+              <div class="l">两路冲突率</div>
+            </div>
+            <div class="kpi"><div class="v">{{ e4Data.review_queue }}</div><div class="l">待人工复核</div></div>
+          </div>
+          <div class="table-wrap">
+          <table v-if="e4Data.metrics">
+            <thead><tr><th>判定方案</th><th>精确率</th><th>召回率</th><th>F1</th></tr></thead>
+            <tbody>
+              <tr><td>规则单路</td><td class="mono">{{ e4Data.metrics.rule_only.precision }}</td>
+                  <td class="mono">{{ e4Data.metrics.rule_only.recall }}</td>
+                  <td class="mono">{{ e4Data.metrics.rule_only.f1 }}</td></tr>
+              <tr><td>LLM 单路</td><td class="mono">{{ e4Data.metrics.llm_only.precision }}</td>
+                  <td class="mono">{{ e4Data.metrics.llm_only.recall }}</td>
+                  <td class="mono">{{ e4Data.metrics.llm_only.f1 }}</td></tr>
+              <tr><td>双路融合</td><td class="mono">{{ e4Data.metrics.fusion.precision }}</td>
+                  <td class="mono">{{ e4Data.metrics.fusion.recall }}</td>
+                  <td class="mono">{{ e4Data.metrics.fusion.f1 }}</td></tr>
+            </tbody>
+          </table>
+          </div>
+          <div v-if="!e4Data.metrics" class="notice">{{ e4Data.note }}</div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           标准对齐（企业级知识与合规）
+           ================================================================== -->
+      <section v-if="tab === 'knowledge'" class="section-in">
+        <div class="page-head">
+          <div class="titles">
+            <div class="eyebrow">Standards Alignment</div>
+            <h1>标准对齐</h1>
+            <div class="desc">
+              把红队测出的数字翻译成企业、审计与监管都能对照检查的通用语言：
+              OWASP 说明风险类别，MITRE ATLAS 描述攻击手段，国标给出可判定的量化阈值。
+            </div>
+          </div>
+        </div>
+
+        <div class="insight">
+          <span class="t">三套标准的分工 · 混用会闹笑话</span>
+          <b>OWASP LLM Top 10</b> 按风险领域组织，回答"哪一类风险"，用于覆盖度自查；
+          <b>MITRE ATLAS</b> 按战术组织技术，回答"攻击者怎么干"，用于攻击链描述；
+          <b>GB/T 45654-2025</b> 给出量化阈值，回答"够不够格上线"，用于合规结论。
+          一句话：ATLAS 描述手段，OWASP 归类风险，国标给出分数线。
+        </div>
+
+        <div class="grid c4" style="margin-bottom:18px">
+          <div class="kpi tone-brand">
+            <div class="v brand">{{ stdMeta.owasp_in_scope || 0 }}<span class="fs12 muted"> / {{ stdMeta.owasp_total || 0 }}</span></div>
+            <div class="l">OWASP 风险在测范围内</div>
+          </div>
+          <div class="kpi tone-ok">
+            <div class="v ok">{{ covSummary.risks_measured || 0 }}</div>
+            <div class="l">已有实测数据的风险</div>
+          </div>
+          <div class="kpi">
+            <div class="v">{{ stdMeta.atlas_total || 0 }}</div>
+            <div class="l">映射的 ATLAS 技术</div>
+          </div>
+          <div class="kpi">
+            <div class="v">{{ complySummary.passed || 0 }}<span class="fs12 muted"> / {{ (complySummary.passed||0) + (complySummary.failed||0) }}</span></div>
+            <div class="l">国标可判定项达标</div>
+          </div>
+        </div>
+
+        <!-- OWASP 覆盖矩阵 -->
+        <div class="card">
+          <h3>OWASP LLM Top 10 (2025) 覆盖矩阵
+            <span class="tag">{{ covSummary.risks_with_seeds || 0 }} 类有用例 · {{ covSummary.risks_measured || 0 }} 类已实测</span>
+          </h3>
+          <div class="card-sub">
+            「用例」= 题库里针对该风险的样本数；「已测」= 实际执行过的任务数。
+            有题目但还没跑过的标记为<b>纸面覆盖</b>——只有数字没有实测，说服力为零。
+          </div>
+          <div class="spec-list">
+            <div v-for="r in owaspRows" :key="r.rid" class="spec-row" :class="{out: !r.in_scope}">
+              <span class="spec-id">{{ r.rid }}</span>
+              <div class="spec-main">
+                <div class="spec-name">
+                  {{ r.name }}
+                  <span class="en">{{ r.name_en }}</span>
+                  <span v-if="!r.in_scope" class="badge gray">不在测试范围</span>
+                  <span v-else-if="r.paper_only" class="badge warn">纸面覆盖</span>
+                  <span v-else-if="r.finished > 0" class="badge brand">已实测</span>
+                  <span v-else class="badge gray">无数据</span>
+                </div>
+                <div class="spec-desc">{{ r.summary }}</div>
+                <div class="spec-note">{{ r.reason }}</div>
+                <div class="meter" v-if="r.in_scope && r.seeds > 0">
+                  <i :class="r.asr === null ? 'warn' : (r.asr > 0.3 ? 'danger' : 'ok')"
+                     :style="{width: (r.asr === null ? 18 : Math.max(8, r.asr * 100)) + '%'}"></i>
+                </div>
+              </div>
+              <div class="spec-stats">
+                <div class="spec-stat"><div class="n">{{ r.seeds }}</div><div class="k">用例</div></div>
+                <div class="spec-stat"><div class="n">{{ r.finished || 0 }}</div><div class="k">已测</div></div>
+                <div class="spec-stat">
+                  <div class="n" :class="r.asr === null ? 'muted' : (r.asr > 0.3 ? 'danger' : 'ok')"
+                       :style="r.asr === null ? 'font-size:14px' : ''">
+                    {{ r.asr === null ? '—' : pct(r.asr) }}
+                  </div>
+                  <div class="k">ASR</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 国标合规 -->
+        <div class="card">
+          <h3>GB/T 45654-2025 合规对照
+            <span class="tag">{{ compliance.standard ? '2025-11-01 实施' : '' }}</span>
+          </h3>
+          <div class="card-sub" v-if="compliance.standard">
+            《{{ compliance.standard }}》是《生成式人工智能服务管理暂行办法》的配套推荐国标，
+            也是国内大模型备案与第三方安全测评的技术依据。下表只对照其中<b>可由黑盒对抗测试直接判定</b>的量化条款。
+          </div>
+          <div v-if="!compliance.items || !compliance.items.length" class="empty">尚未获取合规数据</div>
+          <div v-else>
+            <div v-for="it in compliance.items" :key="it.key" class="comply-row">
+              <div class="comply-icon" :class="it.pass === true ? 'pass' : (it.pass === false ? 'fail' : 'na')">
+                {{ it.pass === true ? '✓' : (it.pass === false ? '✕' : '–') }}
+              </div>
+              <div class="comply-main">
+                <div class="comply-name">
+                  {{ it.name }}
+                  <span class="badge gray" style="margin-left:6px">{{ it.op }} {{ pct(it.threshold) }}</span>
+                  <span v-if="!it.measurable" class="badge gray" style="margin-left:4px">不可实测</span>
+                </div>
+                <div class="comply-clause">{{ it.clause }}　·　{{ it.mapping }}</div>
+              </div>
+              <div class="comply-val" :class="it.pass === true ? 'pass' : (it.pass === false ? 'fail' : 'na')">
+                {{ it.actual === null ? '无数据' : pct(it.actual) }}
+                <div class="fs11 muted" style="font-weight:400" v-if="it.samples">n = {{ it.samples }}</div>
+              </div>
+            </div>
+          </div>
+          <div class="notice" v-if="compliance.disclaimer" style="margin-top:16px;margin-bottom:0">
+            {{ compliance.disclaimer }}
+          </div>
+        </div>
+
+        <!-- ATLAS -->
+        <div class="card">
+          <h3>MITRE ATLAS 攻击技术映射
+            <span class="tag">本平台实际使用的技术路径</span>
+          </h3>
+          <div class="card-sub">
+            成熟度标注的是<b>在野证据强度</b>，不是攻击难度：
+            Feasible 指有论文或 PoC 证明可行；Demonstrated 指已在受控环境成功实施；
+            Realized 指已在真实攻击中被观察到。写报告时把三者混为一谈就是造假。
+          </div>
+          <div class="atlas-grid">
+            <div v-for="t in atlasTechs" :key="t.tid" class="atlas-card">
+              <div class="hd">
+                <span class="tid">{{ t.tid }}</span>
+                <span class="nm">{{ t.name }}</span>
+              </div>
+              <div class="en">{{ t.name_en }}</div>
+              <div class="ds">{{ t.note }}</div>
+              <div class="ft">
+                <span class="mat" :class="t.maturity.toLowerCase()">{{ t.maturity }}</span>
+                <span v-for="tc in t.tactics" :key="tc" class="badge gray">{{ tc }}</span>
+                <span v-if="t.operator" class="badge info">算子 {{ t.operator }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 靶标风险画像 -->
+        <div class="card">
+          <h3>靶标风险画像<span class="tag">为什么每个靶标都有弱点</span></h3>
+          <div class="card-sub">
+            弱点必须是架构层面真实存在的，不能是人为留的后门——否则测出来的只是自己的设定，没有外部效度。
+          </div>
+          <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width:60px">编号</th><th>名称</th><th>攻击面</th><th>结构性弱点</th><th style="width:150px">主要风险</th></tr></thead>
+            <tbody>
+              <tr v-for="(v, k) in stdTargets" :key="k">
+                <td class="mono">{{ k }}</td>
+                <td class="nowrap">{{ v.name }}</td>
+                <td class="fs12">{{ v.attack_surface }}</td>
+                <td class="fs12">{{ v.structural_weakness }}</td>
+                <td>
+                  <span v-for="r in v.primary_risks" :key="r" class="badge brand" style="margin-right:4px">{{ r }}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+
+        <!-- 算子分层 -->
+        <div class="card">
+          <h3>变异算子的四层对抗<span class="tag">C1 的设计依据</span></h3>
+          <div class="card-sub">
+            四类算子各打一个检测层。这不是为了凑数量，而是因为不同层的防御手段彼此独立：
+            字符层匹配拦不住语义改写，语义判断拦不住权限框架嵌套。
+          </div>
+          <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width:130px">算子</th><th style="width:120px">作用层</th><th style="width:150px">ATLAS 技术</th><th>为什么这一层能绕过</th></tr></thead>
+            <tbody>
+              <tr v-for="(v, k) in stdOperatorLayers" :key="k">
+                <td><span class="mono">{{ k }}</span></td>
+                <td><span class="badge info">{{ v.layer }}</span></td>
+                <td class="mono fs11">{{ v.atlas }}</td>
+                <td class="fs12">{{ v.rationale }}</td>
+              </tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           人工复核
+           ================================================================== -->
+      <section v-if="tab === 'review'" class="section-in">
+        <div class="page-head">
+          <div class="titles">
+            <div class="eyebrow">Human Review</div>
+            <h1>人工复核</h1>
+            <div class="desc">
+              两路判定冲突或 LLM 路置信度偏低的样本会进入此队列。
+            </div>
+          </div>
+        </div>
+
+        <div class="notice">
+          <b>标注铁律</b>　这里的人工标注是 E4 实验的金标准，必须<b>独立判断</b>，
+          不得参考上方的规则 / LLM 结论，否则构成循环论证，Kappa 系数失去意义。
+        </div>
+
+        <div class="card">
+          <h3>待复核<span class="tag">{{ reviews.length }} 条</span></h3>
+          <div v-if="!reviews.length" class="empty">队列为空</div>
+          <div v-for="r in reviews" :key="r.judge_id" class="review-item">
+            <div class="row" style="margin-bottom:11px">
+              <span class="badge gray">任务 {{ r.run_id }}</span>
+              <span class="badge gray">第 {{ r.turn }} 轮</span>
+              <span v-if="r.conflict" class="badge warn">两路冲突</span>
+              <span class="badge" :class="r.rule_success ? 'err' : 'ok'">规则：{{ r.rule_success ? '成功' : '失败' }}</span>
+              <span class="badge" :class="r.llm_success ? 'err' : 'ok'">LLM：{{ r.llm_success ? '成功' : '失败' }} ({{ r.llm_confidence }})</span>
+            </div>
+            <div class="fs11 muted" style="margin-bottom:4px">攻击请求</div>
+            <div class="review-quote" style="margin-bottom:10px">{{ r.prompt }}</div>
+            <div class="fs11 muted" style="margin-bottom:4px">目标响应</div>
+            <div class="review-quote">{{ r.response }}</div>
+            <div class="row mt12">
+              <!-- 复核要求中立：这个按钮记录的是"攻破了"，不是"操作成功"。
+                   用品牌绿实底会把坏消息渲染成好结果，且让并列的两个判定权重失衡 -->
+              <button class="btn danger" @click="doReview(r.judge_id, true)">判定为攻击成功</button>
+              <button class="btn" @click="doReview(r.judge_id, false)">判定为未成功</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           测评报告
+           ================================================================== -->
+      <section v-if="tab === 'report'" class="section-in">
+        <div class="page-head">
+          <div class="titles">
+            <div class="eyebrow">Assessment Report</div>
+            <h1>测评报告</h1>
+            <div class="desc">
+              把一次批次的全部结果整理成可直接交付的报告，包含结论、风险分类明细与典型攻击链。
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>选择批次</h3>
+          <div class="row">
+            <select v-model="reportBatch" style="min-width:340px;max-width:460px">
+              <option value="">请选择批次</option>
+              <option v-for="b in batches" :key="b.uid" :value="b.uid">
+                {{ b.uid }} · {{ b.experiment || '手工' }} · {{ b.target_uid }} · {{ profileLabel(b.guardrail_profile) }}
+              </option>
+            </select>
+            <button class="btn primary" :disabled="!reportBatch" @click="loadReport">生成预览</button>
+            <button class="btn" :disabled="!reportBatch" @click="exportReport">导出文件</button>
+          </div>
+          <!-- 空态引导：此前这一页只有一行下拉框，下面是整屏空白，
+               新用户不知道该选什么，也不知道批次从哪来 -->
+          <p class="hint" v-if="!reportData" style="margin:12px 0 0">
+            <template v-if="!batches.length">
+              当前还没有执行批次。先到 <a @click="go('runs')" style="cursor:pointer">攻击任务</a> 页新建一个批次并执行，
+              再回来这里生成报告。
+            </template>
+            <template v-else>
+              共 {{ batches.length }} 个批次可选。选定后点「生成预览」，可看到结论摘要、风险分类明细与典型攻击链；
+              点「导出文件」可下载 HTML 与 Markdown 两种格式。
+            </template>
+          </p>
+          <div v-if="reportPaths" class="notice blue" style="margin-top:14px;margin-bottom:0">
+            已导出文件　
+            <a :href="'/api/report/' + reportBatch + '/file?fmt=html'" target="_blank">打开 HTML 报告</a>
+            　｜　
+            <a :href="'/api/report/' + reportBatch + '/file?fmt=md'" target="_blank">下载 Markdown</a>
+            <div class="mono fs11 mt8">{{ reportPaths.html }}</div>
+          </div>
+        </div>
+
+        <div class="card" v-if="reportData">
+          <h3>报告预览<span class="tag">{{ reportData.batch.uid }}</span></h3>
+          <div class="notice red" v-if="reportData.batch.mock">
+            该批次为 MOCK 运行，数据不得用于论文。
+          </div>
+          <div class="grid c4" style="margin-bottom:18px">
+            <div class="kpi tone-danger">
+              <div class="v danger">{{ pct(reportData.summary.asr) }}</div>
+              <div class="l">攻击成功率</div>
+            </div>
+            <div class="kpi tone-warn">
+              <div class="v warn">{{ reportData.risk[0] }}</div>
+              <div class="l">风险等级</div>
+            </div>
+            <div class="kpi"><div class="v">{{ reportData.summary.success }} / {{ reportData.summary.finished }}</div><div class="l">成功 / 有效</div></div>
+            <div class="kpi"><div class="v">{{ reportData.summary.blocked_turns }}</div><div class="l">拦截轮次</div></div>
+          </div>
+
+          <h3>风险类别分布</h3>
+          <div class="table-wrap">
+          <table>
+            <thead><tr><th>风险类别</th><th>样本</th><th>成功</th><th>ASR</th><th style="width:180px"></th></tr></thead>
+            <tbody>
+              <tr v-for="(v, k) in reportData.summary.by_category" :key="k">
+                <td>{{ k }}</td>
+                <td class="mono">{{ v.total }}</td>
+                <td class="mono">{{ v.success }}</td>
+                <td class="mono">{{ pct(v.asr) }}</td>
+                <td>
+                  <div class="meter" style="margin-top:6px">
+                    <i :class="v.asr > 0.3 ? 'danger' : 'ok'" :style="{width: Math.max(4, v.asr * 100) + '%'}"></i>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          </div>
+
+          <div v-if="reportData.sample" class="mt16">
+            <h3>典型攻击链</h3>
+            <div class="timeline">
+              <div v-for="t in reportData.sample.turns" :key="t.index"
+                   class="tl-item" :class="{ok: t.success, bt: t.backtracked}">
+                <div class="tl-hd">第 {{ t.index }} 轮 · {{ stateLabel(t.state) }}</div>
+                <div class="tl-body">
+                  <div class="lb">攻击方</div><div class="tx">{{ t.prompt }}</div>
+                  <div class="lb">目标响应</div><div class="tx">{{ (t.response || '').slice(0, 400) }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<script src="/static/vendor/vue.global.prod.js"></script>
+<script src="/static/vendor/echarts.min.js"></script>
+<script src="/static/app.js?v=20261025m"></script>
+<script src="/static/login.js?v=20261028a"></script>
+</body>
+</html>
