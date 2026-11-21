@@ -260,7 +260,9 @@ async def run_case(
         history.append({"role": "assistant", "content": resp_text})
 
         signals = detect_signals(resp_text)
-        jr = await judge_mod.judge(prompt, resp_text)
+        # tool_calls 传给判定器：工具劫持（LLM06）的证据在调用记录里，
+        # 只看响应文本的判定器对"回复正常、背地里偷调工具"的攻击是全盲的。
+        jr = await judge_mod.judge(prompt, resp_text, tool_calls=chat.tool_calls)
         res.token_in += jr.token_in
         res.token_out += jr.token_out
         res.cost += jr.cost
@@ -337,7 +339,7 @@ async def replay(frozen_turns: list[dict], target: BaseTarget) -> ReplayResult:
         chat = await target.chat(
             t["prompt"],
             history=[ChatMessage(role=m["role"], content=m["content"]) for m in history])
-        jr = await judge_mod.judge(t["prompt"], chat.reply)
+        jr = await judge_mod.judge(t["prompt"], chat.reply, tool_calls=chat.tool_calls)
         same = jr.final_success == bool(t.get("success"))
         matched += 1 if same else 0
         detail.append({

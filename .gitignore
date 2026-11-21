@@ -8,6 +8,7 @@ data/*.db.*
 data/llm_cache/
 data/reports/
 data/*.log
+data/tool_poison.state
 
 # ===== 二进制与生成物 =====
 wheels/

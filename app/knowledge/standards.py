@@ -406,6 +406,11 @@ OPERATOR_LAYER_NOTE: dict[str, dict[str, str]] = {
 RISK_TECHNIQUE_SUPPORT: dict[str, list[str]] = {
     "LLM08": ["indirect"],
     "LLM10": ["cost_amplification"],
+    # 工具描述投毒用例（S082-S084，P1-1）：手段是第三方工具描述里埋隐藏
+    # 指令，按 OWASP 定义同时构成 LLM06 过度代理（Agent 被诱执行越权动作）
+    # 与 LLM01 提示注入（工具描述是进入上下文的注入载体）。
+    # category 存 LLM06（危害归因），LLM01 由既有直接注入用例覆盖。
+    "LLM06": ["tool_description_poisoning"],
 }
 
 

@@ -54,6 +54,11 @@ class T3OfficeAgent(BaseTarget):
     form_type = "agent"
 
     def pre_tool_context(self) -> str:
+        # 每次构建上下文前对齐工具描述注入状态：投毒注入器是独立进程，
+        # 通过 data/tool_poison.state 标记文件与本进程通信（与 RAG 投毒
+        # 的 kb mtime 失效同构）。文件不存在时是快速 no-op。
+        from scripts.poison_tools import apply_state
+        apply_state()
         return tools.TOOL_DOCS
 
 

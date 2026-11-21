@@ -545,7 +545,7 @@ async def run_chain(
         history.append({"role": "user", "content": prompt})
         history.append({"role": "assistant", "content": resp_text})
 
-        jr = await judge_mod.judge(prompt, resp_text)
+        jr = await judge_mod.judge(prompt, resp_text, tool_calls=chat.tool_calls)
         res.token_in += jr.token_in
         res.token_out += jr.token_out
         res.cost += jr.cost
