@@ -24,7 +24,7 @@ T5 = T2 + 全护栏配置的同构视图，专为"护栏前后对照"实验设�
 
 ### 2. 攻击载荷库（覆盖 OWASP LLM Top 10）
 
-- **提示注入**：直接注入 / 角色扮演 / 逻辑绑架 / 虚构包装
+- **提示注入**：直接注入 / 角色扮演 / 逻辑绑架 / 虚构包装 / Deceptive Delight 渐进绑定（多轮夸奖链）
 - **间接注入 + RAG 动态投毒**：三代载荷（PoisonedRAG 直白指令 → ToxicRAG 知识更新叙事 → InceptionRAG 休眠段落），支持 query 锚定与投毒密度扫描
 - **工具描述投毒**（LLM06）：MCPTox 式隐藏指令（伪数据一致性检查偷读配置）/ Invariant 式交叉劫持（伪依赖协议让邮件夹带机密），注入服务免重启生效
 - **成本放大攻击**（LLM10）：ThinkTrap 思维链绑架 / RECUR 递归自问 / OverThink 伪严谨诱导
@@ -34,6 +34,8 @@ T5 = T2 + 全护栏配置的同构视图，专为"护栏前后对照"实验设�
 ### 3. 三种攻击组织方式
 
 单轮直取 / 多轮渐进（probe → consensus → escalate → attack，带回溯）/ 级联扩权（recon → pivot → exploit → verify，级间规则提取器）。
+
+另有 **Deceptive Delight 渐进绑定**（`strategy="delight"`）：probe → delight×k → attack。升温段不再中性推进，而是持续的夸奖与合作肯定——"你真专业 → 再帮个忙 → 你果然靠谱 → 收尾一步"。每轮单独看都无害且礼貌，串起来是情绪顺从链。同一载荷单轮直取全败、套上绑定链全胜（mock 全矩阵实测），配套种子 S085-S087。
 
 ### 4. 双路交叉判定（C3）
 
